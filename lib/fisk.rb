@@ -8,6 +8,8 @@ require "fisk/basic_block"
 require "fisk/errors"
 require "fisk/version"
 
+require 'crabstone'
+
 class Fisk
   module OperandPredicates
     def unresolved?;        false; end
@@ -779,6 +781,8 @@ class Fisk
     backup = @instructions.dup
     @instructions.clear
 
+    start_pos = buffer.pos
+
     while insn = instructions.shift
       if insn.label?
         labels[insn.name] = buffer.pos
@@ -815,7 +819,30 @@ class Fisk
       raise Errors::SuboptimalPerformance.new(@performance_warnings)
     end
 
+    crapstone buffer, start_pos, buffer.pos
+
     buffer
+  end
+
+  def crapstone buffer, start_pos, end_pos
+    cs = Crabstone::Disassembler.new(Crabstone::ARCH_X86, Crabstone::MODE_64)
+
+    case buffer
+    when Fisk::Helpers::JITBuffer
+      str = buffer.memory
+    when StringIO
+      str = buffer.string
+    else
+      raise "No JITBuffer/StringIO: #{buffer.class}"
+    end
+
+    if str.size > 0
+      puts "================================="
+
+      cs.disasm(str[0, end_pos - start_pos], 0x0).each { |i| printf "%#04x:\t%s\t\t%s\n", i.address, i.mnemonic, i.op_str }
+
+      puts "================================="
+    end
   end
 
   # If the performance check is enabled, warnings are added to @performance_warnings.
